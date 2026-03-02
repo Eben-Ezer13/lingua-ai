@@ -36,34 +36,54 @@ const ALL_BADGES = [
 
 const EXERCISES_BY_LEVEL = {
   A1: [
-    { type: "translate", prompt: "Traduisez : 'Bonjour, comment vous appelez-vous ?'", answer: null },
     { type: "fill", prompt: "Complétez : 'Je ___ (s'appeler) Marie.'", answer: "m'appelle" },
-    { type: "choose", prompt: "Choisissez la bonne réponse : 'Comment ___ vous ?'", options: ["allez", "alles", "aller"], answer: "allez" },
+    { type: "choose", prompt: "Choisissez : 'Comment ___ vous ?'", options: ["allez", "alles", "aller"], answer: "allez" },
+    { type: "choose", prompt: "Comment dit-on 'thank you' ?", options: ["Merci", "Pardon", "Bonjour"], answer: "Merci" },
   ],
   A2: [
-    { type: "translate", prompt: "Traduisez : 'J'habite à Paris depuis deux ans.'", answer: null },
-    { type: "fill", prompt: "Complétez : 'Hier, il ___ (pleuvoir) toute la journée.'", answer: "a plu" },
     { type: "choose", prompt: "Quel temps est correct ? 'Hier je ___ au marché.'", options: ["vais", "suis allé", "allais"], answer: "suis allé" },
+    { type: "fill", prompt: "Complétez : 'Hier, il ___ (pleuvoir) toute la journée.'", answer: "a plu" },
+    { type: "choose", prompt: "Choisissez : 'J'ai ___ faim.'", options: ["très", "beaucoup", "trop de"], answer: "très" },
   ],
   B1: [
-    { type: "translate", prompt: "Traduisez : 'If I had more time, I would learn Japanese.'", answer: null },
-    { type: "fill", prompt: "Complétez : 'Bien ___ il soit fatigué, il a terminé son travail.'", answer: "que" },
-    { type: "choose", prompt: "Choisissez : 'Il faut que vous ___ patient.'", options: ["êtes", "serez", "soyez"], answer: "soyez" },
+    { type: "choose", prompt: "Subjonctif : 'Il faut que vous ___ patient.'", options: ["êtes", "serez", "soyez"], answer: "soyez" },
+    { type: "fill", prompt: "Complétez : 'Bien ___ il soit fatigué, il a continué.'", answer: "que" },
+    { type: "choose", prompt: "Conditionnel : 'Si j'avais le temps, je ___ voyager.'", options: ["voudrais", "veux", "voulais"], answer: "voudrais" },
   ],
   B2: [
-    { type: "translate", prompt: "Traduisez une métaphore complexe en contexte formel.", answer: null },
     { type: "fill", prompt: "Complétez : 'À ___ de ses efforts, il n'a pas réussi.'", answer: "défaut" },
-    { type: "choose", prompt: "Expression idiomatique : 'Avoir le ___ entre deux chaises'", options: ["pied", "cul", "dos"], answer: "cul" },
+    { type: "choose", prompt: "Registre soutenu : '___ votre compréhension.'", options: ["Merci pour", "Je vous remercie de", "Merci de"], answer: "Je vous remercie de" },
+    { type: "fill", prompt: "Complétez : 'Il convient de ___ que ce projet est ambitieux.'", answer: "souligner" },
   ],
   C1: [
-    { type: "translate", prompt: "Reformulez avec une périphrase soutenue : 'Ce texte est ambigu.'", answer: null },
-    { type: "fill", prompt: "Complétez : 'Il n'est pas ___ que cette hypothèse soit vraie.'", answer: "certain" },
+    { type: "fill", prompt: "Complétez : 'Cette décision ne ___ pas sans conséquences.'", answer: "saurait être" },
+    { type: "choose", prompt: "Nuance : 'Il ___ de noter cette contradiction.'", options: ["importe", "convient", "Les deux"], answer: "Les deux" },
   ],
   C2: [
-    { type: "translate", prompt: "Traduisez un extrait littéraire en préservant le style.", answer: null },
-    { type: "fill", prompt: "Complétez avec un registre soutenu : 'Il ___ de souligner que…'", answer: "convient" },
+    { type: "fill", prompt: "Périphrase soutenue pour 'c'est difficile' :", answer: "cela ne va pas sans difficulté" },
+    { type: "choose", prompt: "Style littéraire : 'La nuit ___ sur la ville.'", options: ["tombait", "s'abattait", "venait"], answer: "s'abattait" },
   ],
 };
+
+// ── Appel API via proxy sécurisé ─────────────────────────────────────────────
+async function callClaude(system, messages, max_tokens = 800) {
+  const res = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens,
+      system,
+      messages,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Erreur HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content?.[0]?.text || "";
+}
 
 function getCurrentLevel(xp) {
   let current = CEFR_LEVELS[0];
@@ -77,7 +97,7 @@ function getNextLevel(xp) {
   return CEFR_LEVELS.find(l => l.xpRequired > xp) || null;
 }
 
-function XPBar({ xp, color }) {
+function XPBar({ xp }) {
   const current = getCurrentLevel(xp);
   const next = getNextLevel(xp);
   const progress = next ? ((xp - current.xpRequired) / (next.xpRequired - current.xpRequired)) * 100 : 100;
@@ -95,69 +115,38 @@ function XPBar({ xp, color }) {
   );
 }
 
-function BadgeGrid({ stats, earnedIds }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-      {ALL_BADGES.map(b => {
-        const earned = earnedIds.includes(b.id);
-        return (
-          <div key={b.id} style={{
-            background: earned ? `${b.id.includes("level") ? "#FFD16620" : "#4ECDC420"}` : "#1a1a2e",
-            border: `1px solid ${earned ? "#FFD16660" : "#2a2a4a"}`,
-            borderRadius: 10, padding: "10px 8px", textAlign: "center", opacity: earned ? 1 : 0.35,
-            transition: "all 0.3s"
-          }}>
-            <div style={{ fontSize: 22, marginBottom: 4 }}>{b.icon}</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: earned ? "#e0e0e0" : "#555" }}>{b.label}</div>
-            <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>{b.desc}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
+// ── Test de positionnement ───────────────────────────────────────────────────
 function PlacementTest({ lang, onFinish }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [input, setInput] = useState("");
+  const [error, setError] = useState("");
 
   const questions = [
-    { q: `Traduisez en ${lang.name} : "Hello, my name is..."`, type: "text" },
-    { q: `Dites en ${lang.name} comment vous avez passé votre week-end.`, type: "text" },
-    { q: `En ${lang.name}, expliquez la différence entre passé et futur.`, type: "text" },
-    { q: `Rédigez un court paragraphe en ${lang.name} sur un sujet de société.`, type: "text" },
+    `Traduisez en ${lang.name} : "Hello, my name is..."`,
+    `Décrivez votre journée typique en ${lang.name} (3-4 phrases).`,
+    `En ${lang.name}, expliquez ce qu'est le réchauffement climatique.`,
+    `Rédigez un court avis critique sur un film en ${lang.name}.`,
   ];
 
   const submit = async () => {
     if (!input.trim()) return;
-    const newAnswers = [...answers, input.trim()];
-    setAnswers(newAnswers);
+    const all = [...answers, input.trim()];
+    setAnswers(all);
     setInput("");
     if (step < questions.length - 1) { setStep(s => s + 1); return; }
-    setLoading(true);
+    setLoading(true); setError("");
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 600,
-          messages: [{
-            role: "user",
-            content: `Tu es un examinateur CECRL. Évalue ces 4 réponses en ${lang.name} et donne un niveau A1/A2/B1/B2/C1/C2 précis.
-Réponses : ${newAnswers.map((a, i) => `Q${i + 1}: ${a}`).join(" | ")}
-Réponds UNIQUEMENT en JSON : {"level":"B1","score":58,"feedback":"Explication courte en français","strengths":["point1","point2"],"improvements":["point1","point2"]}`
-          }]
-        })
-      });
-      const data = await res.json();
-      const text = data.content[0]?.text || "{}";
-      const clean = text.replace(/```json|```/g, "").trim();
-      setResult(JSON.parse(clean));
-    } catch { setResult({ level: "A2", score: 40, feedback: "Évaluation indisponible.", strengths: [], improvements: [] }); }
+      const raw = await callClaude(
+        `Tu es un examinateur CECRL expert. Évalue ces réponses en ${lang.name} et retourne UNIQUEMENT un objet JSON valide sans markdown : {"level":"A1|A2|B1|B2|C1|C2","score":0-100,"feedback":"explication en français","strengths":["..."],"improvements":["..."]}`,
+        [{ role: "user", content: all.map((a, i) => `Q${i + 1}: ${a}`).join("\n") }],
+        600
+      );
+      const clean = raw.replace(/```json|```/g, "").trim();
+      setResult(JSON.parse(clean.slice(clean.indexOf("{"), clean.lastIndexOf("}") + 1)));
+    } catch (e) { setError("Erreur : " + e.message); }
     setLoading(false);
   };
 
@@ -165,7 +154,7 @@ Réponds UNIQUEMENT en JSON : {"level":"B1","score":58,"feedback":"Explication c
     <div style={{ padding: 20 }}>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <div style={{ fontSize: 48 }}>{lang.flag}</div>
-        <div style={{ fontSize: 28, fontWeight: 700, color: CEFR_LEVELS.find(l => l.id === result.level)?.color || "#4ECDC4", marginTop: 8 }}>{result.level}</div>
+        <div style={{ fontSize: 32, fontWeight: 700, color: CEFR_LEVELS.find(l => l.id === result.level)?.color || "#4ECDC4", marginTop: 8 }}>{result.level}</div>
         <div style={{ fontSize: 14, color: "#888", marginTop: 4 }}>Score estimé : {result.score}/100</div>
       </div>
       <div style={{ background: "#1a1a2e", borderRadius: 10, padding: 14, marginBottom: 12, fontSize: 13, lineHeight: 1.6, color: "#ccc" }}>{result.feedback}</div>
@@ -182,32 +171,30 @@ Réponds UNIQUEMENT en JSON : {"level":"B1","score":58,"feedback":"Explication c
         </div>
       )}
       <button onClick={() => onFinish(result.level)} style={{ width: "100%", padding: "12px", background: lang.color, border: "none", borderRadius: 10, color: "#0d0d1a", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
-        Appliquer ce niveau et commencer →
+        Appliquer ce niveau →
       </button>
     </div>
   );
 
   return (
     <div style={{ padding: 20 }}>
-      <div style={{ fontSize: 12, color: "#666", fontFamily: "monospace", marginBottom: 4 }}>TEST DE POSITIONNEMENT — {step + 1}/{questions.length}</div>
+      <div style={{ fontSize: 12, color: "#666", fontFamily: "monospace", marginBottom: 4 }}>QUESTION {step + 1}/{questions.length}</div>
       <div style={{ background: "#1a1a2e", borderRadius: 8, height: 4, marginBottom: 16 }}>
         <div style={{ width: `${((step + 1) / questions.length) * 100}%`, height: "100%", background: lang.color, borderRadius: 8, transition: "width 0.3s" }} />
       </div>
-      <div style={{ fontSize: 14, color: "#e0e0e0", marginBottom: 14, lineHeight: 1.6 }}>{questions[step].q}</div>
-      <textarea value={input} onChange={e => setInput(e.target.value)} rows={4}
-        placeholder="Votre réponse..."
+      <div style={{ fontSize: 14, color: "#e0e0e0", marginBottom: 14, lineHeight: 1.6 }}>{questions[step]}</div>
+      <textarea value={input} onChange={e => setInput(e.target.value)} rows={4} placeholder="Votre réponse..."
         style={{ width: "100%", background: "#0d0d1a", border: `1px solid ${lang.color}50`, borderRadius: 8, padding: "10px 12px", color: "#e0e0e0", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
-      <button onClick={submit} disabled={loading || !input.trim()} style={{
-        marginTop: 10, width: "100%", padding: "11px", background: input.trim() ? lang.color : "#2a2a4a",
-        border: "none", borderRadius: 10, color: "#0d0d1a", fontWeight: 700, cursor: "pointer", fontSize: 13
-      }}>
+      {error && <div style={{ color: "#FF6B6B", fontSize: 12, marginTop: 8 }}>{error}</div>}
+      <button onClick={submit} disabled={loading || !input.trim()} style={{ marginTop: 10, width: "100%", padding: "11px", background: input.trim() && !loading ? lang.color : "#2a2a4a", border: "none", borderRadius: 10, color: "#0d0d1a", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
         {loading ? "Analyse en cours…" : step < questions.length - 1 ? "Suivant →" : "Voir mon niveau"}
       </button>
     </div>
   );
 }
 
-function ExercisePanel({ lang, cefrLevel, stats }) {
+// ── Exercices ────────────────────────────────────────────────────────────────
+function ExercisePanel({ lang, cefrLevel }) {
   const exercises = EXERCISES_BY_LEVEL[cefrLevel] || EXERCISES_BY_LEVEL["A1"];
   const [idx, setIdx] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -218,31 +205,29 @@ function ExercisePanel({ lang, cefrLevel, stats }) {
   const checkAnswer = async () => {
     if (!answer.trim()) return;
     if (ex.type === "choose" || ex.type === "fill") {
-      setFeedback({ ok: answer.toLowerCase().trim() === ex.answer?.toLowerCase(), msg: answer.toLowerCase().trim() === ex.answer?.toLowerCase() ? `✓ Correct ! La réponse est bien "${ex.answer}"` : `✗ La bonne réponse était "${ex.answer}"` });
+      const ok = answer.toLowerCase().trim() === ex.answer.toLowerCase().trim();
+      setFeedback({ ok, msg: ok ? `✓ Correct ! La réponse est bien "${ex.answer}"` : `✗ La bonne réponse était "${ex.answer}"` });
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 300,
-          messages: [{ role: "user", content: `Exercice niveau ${cefrLevel} en ${lang.name}. Consigne: "${ex.prompt}". Réponse de l'apprenant: "${answer}". Évalue brièvement en français (2 phrases max) et dis si c'est correct. JSON: {"ok":true/false,"msg":"feedback"}` }]
-        })
-      });
-      const data = await res.json();
-      const text = data.content[0]?.text?.replace(/```json|```/g, "").trim();
-      setFeedback(JSON.parse(text));
+      const raw = await callClaude(
+        `Évalue cette réponse d'exercice niveau ${cefrLevel} en ${lang.name}. Retourne UNIQUEMENT du JSON valide : {"ok":true/false,"msg":"feedback court en français"}`,
+        [{ role: "user", content: `Consigne: "${ex.prompt}"\nRéponse: "${answer}"` }],
+        200
+      );
+      const clean = raw.replace(/```json|```/g, "").trim();
+      setFeedback(JSON.parse(clean.slice(clean.indexOf("{"), clean.lastIndexOf("}") + 1)));
     } catch { setFeedback({ ok: false, msg: "Impossible d'évaluer pour le moment." }); }
     setLoading(false);
   };
 
+  const next = () => { setIdx(i => (i + 1) % exercises.length); setAnswer(""); setFeedback(null); };
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 12, color: "#666", fontFamily: "monospace" }}>EXERCICE {idx + 1}/{exercises.length} — {cefrLevel}</div>
+        <div style={{ fontSize: 11, color: "#666", fontFamily: "monospace" }}>EXERCICE {idx + 1}/{exercises.length} — {cefrLevel}</div>
         <div style={{ display: "flex", gap: 4 }}>
           {exercises.map((_, i) => (
             <div key={i} onClick={() => { setIdx(i); setAnswer(""); setFeedback(null); }} style={{ width: 20, height: 20, borderRadius: "50%", background: i === idx ? lang.color : "#2a2a4a", cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#0d0d1a", fontWeight: 700 }}>{i + 1}</div>
@@ -253,10 +238,7 @@ function ExercisePanel({ lang, cefrLevel, stats }) {
       {ex.type === "choose" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
           {ex.options.map(opt => (
-            <div key={opt} onClick={() => setAnswer(opt)} style={{
-              padding: "10px 14px", borderRadius: 8, border: `1px solid ${answer === opt ? lang.color : "#2a2a4a"}`,
-              background: answer === opt ? `${lang.color}20` : "#1a1a2e", cursor: "pointer", fontSize: 13, color: "#e0e0e0"
-            }}>{opt}</div>
+            <div key={opt} onClick={() => !feedback && setAnswer(opt)} style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${answer === opt ? lang.color : "#2a2a4a"}`, background: feedback ? (opt === ex.answer ? "#4ECDC420" : answer === opt ? "#FF6B6B20" : "#1a1a2e") : answer === opt ? `${lang.color}20` : "#1a1a2e", cursor: feedback ? "default" : "pointer", fontSize: 13, color: "#e0e0e0" }}>{opt}</div>
           ))}
         </div>
       ) : (
@@ -269,19 +251,16 @@ function ExercisePanel({ lang, cefrLevel, stats }) {
         </div>
       )}
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={checkAnswer} disabled={loading || !answer.trim()} style={{ flex: 1, padding: "10px", background: answer.trim() ? lang.color : "#2a2a4a", border: "none", borderRadius: 8, color: "#0d0d1a", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-          {loading ? "…" : "Vérifier"}
-        </button>
-        {feedback && idx < exercises.length - 1 && (
-          <button onClick={() => { setIdx(i => i + 1); setAnswer(""); setFeedback(null); }} style={{ flex: 1, padding: "10px", background: "#2a2a4a", border: "none", borderRadius: 8, color: "#e0e0e0", cursor: "pointer", fontSize: 13 }}>
-            Suivant →
-          </button>
-        )}
+        {!feedback
+          ? <button onClick={checkAnswer} disabled={loading || !answer.trim()} style={{ flex: 1, padding: "10px", background: answer.trim() && !loading ? lang.color : "#2a2a4a", border: "none", borderRadius: 8, color: "#0d0d1a", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>{loading ? "…" : "Vérifier"}</button>
+          : <button onClick={next} style={{ flex: 1, padding: "10px", background: lang.color, border: "none", borderRadius: 8, color: "#0d0d1a", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Suivant →</button>
+        }
       </div>
     </div>
   );
 }
 
+// ── App principale ───────────────────────────────────────────────────────────
 export default function LanguageTutor() {
   const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
   const [messages, setMessages] = useState([]);
@@ -302,12 +281,12 @@ export default function LanguageTutor() {
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showTest, setShowTest] = useState(false);
   const [cefrLevel, setCefrLevel] = useState("A1");
+  const [apiError, setApiError] = useState("");
   const messagesEndRef = useRef(null);
   const lang = selectedLang;
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // Check badges on stats change
   useEffect(() => {
     ALL_BADGES.forEach(b => {
       if (!earnedBadges.includes(b.id) && b.condition(stats)) {
@@ -316,7 +295,7 @@ export default function LanguageTutor() {
         setTimeout(() => setNewBadge(null), 3500);
       }
     });
-  }, [stats, earnedBadges]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stats]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getSystemPrompt = useCallback(() => {
     const lvl = CEFR_LEVELS.find(l => l.id === cefrLevel);
@@ -331,77 +310,54 @@ Après ta réponse ajoute :
 ---END---`;
   }, [lang, mode, cefrLevel]);
 
+  const startSession = useCallback(async () => {
+    setMessages([]); setFeedback([]); setApiError(""); setLoading(true);
+    try {
+      const raw = await callClaude(
+        getSystemPrompt(),
+        [{ role: "user", content: `Démarre la session avec un message de bienvenue adapté au niveau ${cefrLevel}.` }],
+        250
+      );
+      const cleanText = raw.replace(/---FEEDBACK---[\s\S]*?---END---/g, "").trim();
+      setMessages([{ role: "assistant", content: cleanText, ts: Date.now() }]);
+    } catch (e) { setApiError(e.message); }
+    setLoading(false);
+  }, [getSystemPrompt, cefrLevel]);
+
+  useEffect(() => { startSession(); }, [selectedLang, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userMsg = { role: "user", content: input, ts: Date.now() };
     const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
-    setInput("");
-    setLoading(true);
+    setMessages(newMessages); setInput(""); setApiError(""); setLoading(true);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: getSystemPrompt(),
-          messages: newMessages.map(m => ({ role: m.role, content: m.content }))
-        })
-      });
-      const data = await response.json();
-      const raw = data.content?.[0]?.text || "";
+      const raw = await callClaude(
+        getSystemPrompt(),
+        newMessages.map(m => ({ role: m.role, content: m.content }))
+      );
       const fMatch = raw.match(/---FEEDBACK---([\s\S]*?)---END---/);
+      const cleanText = raw.replace(/---FEEDBACK---[\s\S]*?---END---/g, "").trim();
       let newFb = [];
-      const cleanText = raw.replace(/---FEEDBACK---[\s\S]*?---END---/, "").trim();
       if (fMatch) fMatch[1].trim().split("\n").filter(Boolean).forEach(l => { try { newFb.push(JSON.parse(l)); } catch {} });
       setFeedback(newFb);
       setMessages(prev => [...prev, { role: "assistant", content: cleanText, ts: Date.now() }]);
-      setStats(prev => ({
-        ...prev,
-        messages: prev.messages + 1,
-        xp: prev.xp + (newFb.some(f => f.type === "success") ? 15 : 10),
-        langsUsed: [...new Set([...(prev.langsUsed || []), lang.code])]
-      }));
-      // Auto-update CEFR from XP
-      const newXp = stats.xp + (newFb.some(f => f.type === "success") ? 15 : 10);
-      setCefrLevel(getCurrentLevel(newXp).id);
-      setSidebarTab("chat");
-    } catch {}
-    setLoading(false);
-  };
-
-  const startSession = async () => {
-    setMessages([]);
-    setLoading(true);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 250,
-          system: getSystemPrompt(),
-          messages: [{ role: "user", content: `Démarre la session avec un message de bienvenue adapté au niveau ${cefrLevel}.` }]
-        })
+      const xpGain = newFb.some(f => f.type === "success") ? 15 : 10;
+      setStats(prev => {
+        const newXp = prev.xp + xpGain;
+        setCefrLevel(getCurrentLevel(newXp).id);
+        return { ...prev, messages: prev.messages + 1, xp: newXp, langsUsed: [...new Set([...(prev.langsUsed || []), lang.code])] };
       });
-      const data = await res.json();
-      const cleanText = (data.content?.[0]?.text || "").replace(/---FEEDBACK---[\s\S]*?---END---/, "").trim();
-      setMessages([{ role: "assistant", content: cleanText, ts: Date.now() }]);
-    } catch {}
+      setSidebarTab("chat");
+    } catch (e) { setApiError(e.message); }
     setLoading(false);
   };
 
-  useEffect(() => { startSession(); }, [selectedLang, mode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const formatMessage = (text) => {
-    return text.split(/(_\(Translation:.*?\)_)/gs).map((p, i) =>
-      p.match(/^_\(Translation:/) ? <em key={i} style={{ color: "#777", fontSize: 12, display: "block", marginTop: 6 }}>{p.slice(1, -1)}</em> : <span key={i}>{p}</span>
-    );
-  };
+  const formatMessage = (text) => text.split(/(_\(Translation:.*?\)_)/gs).map((p, i) =>
+    p.match(/^_\(Translation:/) ? <em key={i} style={{ color: "#777", fontSize: 12, display: "block", marginTop: 6 }}>{p.slice(1, -1)}</em> : <span key={i}>{p}</span>
+  );
 
   const currentLevel = getCurrentLevel(stats.xp);
-
   const SIDEBAR_TABS = [
     { id: "chat", icon: "💬", label: "Retour" },
     { id: "exercises", icon: "📝", label: "Exercices" },
@@ -413,15 +369,8 @@ Après ta réponse ajoute :
   return (
     <div style={{ minHeight: "100vh", background: "#0d0d1a", color: "#e0e0e0", fontFamily: "Georgia, serif", display: "flex", flexDirection: "column" }}>
 
-      {/* Badge Toast */}
       {newBadge && (
-        <div style={{
-          position: "fixed", top: 20, right: 20, zIndex: 1000,
-          background: "linear-gradient(135deg, #1a1a2e, #2a2a4a)",
-          border: `2px solid ${lang.color}`, borderRadius: 16, padding: "14px 20px",
-          display: "flex", alignItems: "center", gap: 12, boxShadow: `0 8px 32px ${lang.color}44`,
-          animation: "slideIn 0.4s ease"
-        }}>
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 1000, background: "linear-gradient(135deg, #1a1a2e, #2a2a4a)", border: `2px solid ${lang.color}`, borderRadius: 16, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12, boxShadow: `0 8px 32px ${lang.color}44`, animation: "slideIn 0.4s ease" }}>
           <div style={{ fontSize: 32 }}>{newBadge.icon}</div>
           <div>
             <div style={{ fontSize: 11, color: lang.color, fontFamily: "monospace", marginBottom: 2 }}>BADGE DÉBLOQUÉ !</div>
@@ -433,12 +382,8 @@ Après ta réponse ajoute :
 
       {/* Header */}
       <div style={{ background: "#0d0d1a", borderBottom: "1px solid #2a2a4a", padding: "12px 20px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 24 }}>🎓</span>
-          <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, background: `linear-gradient(90deg, ${lang.color}, #A8DADC)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>LinguaAI</div>
-        </div>
+        <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, background: `linear-gradient(90deg, ${lang.color}, #A8DADC)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>🎓 LinguaAI</div>
 
-        {/* Language */}
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowLangMenu(!showLangMenu)} style={{ background: "#1a1a2e", border: `1px solid ${lang.color}50`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "#e0e0e0", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontFamily: "monospace" }}>
             {lang.flag} {lang.name} ▼
@@ -457,7 +402,6 @@ Après ta réponse ajoute :
           )}
         </div>
 
-        {/* Mode */}
         <div style={{ display: "flex", background: "#1a1a2e", borderRadius: 8, border: "1px solid #2a2a4a", overflow: "hidden" }}>
           {["casual", "structured"].map(m => (
             <button key={m} onClick={() => setMode(m)} style={{ padding: "6px 12px", border: "none", cursor: "pointer", fontSize: 11, fontFamily: "monospace", background: mode === m ? lang.color : "transparent", color: mode === m ? "#0d0d1a" : "#888", fontWeight: mode === m ? 700 : 400 }}>
@@ -466,54 +410,51 @@ Après ta réponse ajoute :
           ))}
         </div>
 
-        {/* CEFR Level */}
         <div style={{ background: `${currentLevel.color}20`, border: `1px solid ${currentLevel.color}50`, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontFamily: "monospace", color: currentLevel.color, fontWeight: 700 }}>
           {currentLevel.id} — {stats.xp} XP
         </div>
 
-        {/* Test Button */}
         <button onClick={() => setShowTest(true)} style={{ background: "#1a1a2e", border: `1px solid ${lang.color}50`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: lang.color, fontSize: 12, fontFamily: "monospace" }}>
           📝 Test de niveau
         </button>
 
-        {/* Badges count */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#888", fontFamily: "monospace" }}>
-          🏆 {earnedBadges.length}/{ALL_BADGES.length}
-        </div>
+        <div style={{ marginLeft: "auto", fontSize: 12, color: "#888", fontFamily: "monospace" }}>🏆 {earnedBadges.length}/{ALL_BADGES.length}</div>
       </div>
 
-      {/* Test Modal */}
       {showTest && (
         <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "#00000088", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#0f0f20", border: "1px solid #2a2a4a", borderRadius: 16, width: 480, maxHeight: "80vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #2a2a4a" }}>
-              <div style={{ fontFamily: "monospace", fontSize: 13, color: lang.color }}>📝 TEST DE POSITIONNEMENT — {lang.flag} {lang.name}</div>
+              <div style={{ fontFamily: "monospace", fontSize: 13, color: lang.color }}>📝 TEST — {lang.flag} {lang.name}</div>
               <button onClick={() => setShowTest(false)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 18 }}>×</button>
             </div>
-            <PlacementTest lang={lang} onFinish={(level) => {
-              setCefrLevel(level);
-              setStats(prev => ({ ...prev, testsPassed: prev.testsPassed + 1 }));
-              setShowTest(false);
-            }} />
+            <PlacementTest lang={lang} onFinish={level => { setCefrLevel(level); setStats(prev => ({ ...prev, testsPassed: prev.testsPassed + 1 })); setShowTest(false); }} />
           </div>
         </div>
       )}
 
-      {/* Main */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", maxHeight: "calc(100vh - 65px)" }}>
-        {/* Chat */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          {/* XP Bar */}
           <div style={{ padding: "8px 20px", borderBottom: "1px solid #1a1a2e" }}>
-            <XPBar xp={stats.xp} color={currentLevel.color} />
+            <XPBar xp={stats.xp} />
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+            {messages.length === 0 && !loading && !apiError && (
+              <div style={{ textAlign: "center", color: "#444", marginTop: 60 }}>
+                <div style={{ fontSize: 48 }}>{lang.flag}</div>
+                <div style={{ fontSize: 13, fontFamily: "monospace", marginTop: 8 }}>Démarrage de la session…</div>
+              </div>
+            )}
+            {apiError && (
+              <div style={{ background: "#FF6B6B20", border: "1px solid #FF6B6B50", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#FF6B6B", textAlign: "center" }}>
+                ⚠️ {apiError}
+                <button onClick={startSession} style={{ display: "block", margin: "10px auto 0", background: "#FF6B6B", border: "none", borderRadius: 8, padding: "6px 16px", color: "#fff", cursor: "pointer", fontSize: 12 }}>Réessayer</button>
+              </div>
+            )}
             {messages.map((msg, i) => (
               <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                {msg.role === "assistant" && (
-                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg, ${lang.color}, #1a1a2e)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0, marginRight: 8, marginTop: 4 }}>{lang.flag}</div>
-                )}
+                {msg.role === "assistant" && <div style={{ width: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg, ${lang.color}, #1a1a2e)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0, marginRight: 8, marginTop: 4 }}>{lang.flag}</div>}
                 <div style={{ maxWidth: "68%", padding: "11px 14px", borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px", background: msg.role === "user" ? `linear-gradient(135deg, ${lang.color}cc, ${lang.color}88)` : "#1a1a2e", border: msg.role === "assistant" ? "1px solid #2a2a4a" : "none", fontSize: 13, lineHeight: 1.7 }}>
                   {msg.role === "assistant" ? formatMessage(msg.content) : msg.content}
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 4, textAlign: "right" }}>{new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
@@ -531,7 +472,6 @@ Après ta réponse ajoute :
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
           <div style={{ padding: "12px 20px", borderTop: "1px solid #2a2a4a", background: "#0d0d1a" }}>
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
               <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} placeholder={`Niveau ${cefrLevel} — Écrivez en ${lang.name}…`} rows={2}
@@ -543,7 +483,7 @@ Après ta réponse ajoute :
 
         {/* Sidebar */}
         <div style={{ width: 300, borderLeft: "1px solid #2a2a4a", background: "#0f0f20", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-          <div style={{ display: "flex", borderBottom: "1px solid #2a2a4a", overflowX: "auto" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #2a2a4a" }}>
             {SIDEBAR_TABS.map(t => (
               <button key={t.id} onClick={() => setSidebarTab(t.id)} style={{ flex: 1, padding: "10px 4px", border: "none", cursor: "pointer", background: sidebarTab === t.id ? "#1a1a2e" : "transparent", color: sidebarTab === t.id ? lang.color : "#555", borderBottom: sidebarTab === t.id ? `2px solid ${lang.color}` : "2px solid transparent", fontSize: 10, fontFamily: "monospace", whiteSpace: "nowrap", minWidth: 50 }}>
                 <div style={{ fontSize: 14, marginBottom: 1 }}>{t.icon}</div>{t.label}
@@ -555,15 +495,14 @@ Après ta réponse ajoute :
             {sidebarTab === "chat" && (
               <div>
                 <div style={{ fontSize: 11, color: "#666", fontFamily: "monospace", marginBottom: 10 }}>RETOUR EN TEMPS RÉEL</div>
-                {feedback.length === 0 ? <div style={{ color: "#444", fontSize: 12, textAlign: "center", marginTop: 24 }}>Envoyez un message pour recevoir du retour.</div>
+                {feedback.length === 0
+                  ? <div style={{ color: "#444", fontSize: 12, textAlign: "center", marginTop: 24 }}>Envoyez un message pour recevoir du retour.</div>
                   : feedback.map((f, i) => {
                     const colors = { success: "#4ECDC4", warning: "#FFD166", error: "#FF6B6B", info: "#A8DADC" };
                     const icons = { success: "✓", warning: "⚠", error: "✗", info: "ℹ" };
-                    return (
-                      <div key={i} style={{ background: `${colors[f.type]}15`, border: `1px solid ${colors[f.type]}40`, borderLeft: `3px solid ${colors[f.type]}`, borderRadius: 8, padding: "9px 11px", marginBottom: 8, fontSize: 12 }}>
-                        <span style={{ color: colors[f.type], fontWeight: 700 }}>{icons[f.type]} </span><span style={{ color: "#e0e0e0" }}>{f.text}</span>
-                      </div>
-                    );
+                    return <div key={i} style={{ background: `${colors[f.type]}15`, border: `1px solid ${colors[f.type]}40`, borderLeft: `3px solid ${colors[f.type]}`, borderRadius: 8, padding: "9px 11px", marginBottom: 8, fontSize: 12 }}>
+                      <span style={{ color: colors[f.type], fontWeight: 700 }}>{icons[f.type]} </span><span style={{ color: "#e0e0e0" }}>{f.text}</span>
+                    </div>;
                   })}
               </div>
             )}
@@ -571,14 +510,23 @@ Après ta réponse ajoute :
             {sidebarTab === "exercises" && (
               <div>
                 <div style={{ fontSize: 11, color: "#666", fontFamily: "monospace", marginBottom: 10 }}>EXERCICES NIVEAU {cefrLevel}</div>
-                <ExercisePanel lang={lang} cefrLevel={cefrLevel} stats={stats} />
+                <ExercisePanel lang={lang} cefrLevel={cefrLevel} />
               </div>
             )}
 
             {sidebarTab === "badges" && (
               <div>
                 <div style={{ fontSize: 11, color: "#666", fontFamily: "monospace", marginBottom: 10 }}>BADGES — {earnedBadges.length}/{ALL_BADGES.length} DÉBLOQUÉS</div>
-                <BadgeGrid stats={stats} earnedIds={earnedBadges} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {ALL_BADGES.map(b => {
+                    const earned = earnedBadges.includes(b.id);
+                    return <div key={b.id} style={{ background: earned ? "#FFD16615" : "#1a1a2e", border: `1px solid ${earned ? "#FFD16650" : "#2a2a4a"}`, borderRadius: 10, padding: "10px 8px", textAlign: "center", opacity: earned ? 1 : 0.35 }}>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{b.icon}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: earned ? "#e0e0e0" : "#555" }}>{b.label}</div>
+                      <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>{b.desc}</div>
+                    </div>;
+                  })}
+                </div>
               </div>
             )}
 
@@ -587,12 +535,9 @@ Après ta réponse ajoute :
                 <div style={{ fontSize: 11, color: "#666", fontFamily: "monospace", marginBottom: 10 }}>OBJECTIFS</div>
                 {goals.map(goal => (
                   <div key={goal.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, padding: "9px 10px", borderRadius: 8, background: goal.done ? `${lang.color}15` : "#1a1a2e", border: `1px solid ${goal.done ? lang.color + "40" : "#2a2a4a"}` }}>
-                    <input type="checkbox" checked={goal.done} onChange={() => {
-                      setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, done: !g.done } : g));
-                      if (!goal.done) setStats(prev => ({ ...prev, goalsCompleted: prev.goalsCompleted + 1 }));
-                    }} style={{ marginTop: 2, accentColor: lang.color, flexShrink: 0 }} />
+                    <input type="checkbox" checked={goal.done} onChange={() => { setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, done: !g.done } : g)); if (!goal.done) setStats(prev => ({ ...prev, goalsCompleted: prev.goalsCompleted + 1 })); }} style={{ marginTop: 2, accentColor: lang.color, flexShrink: 0 }} />
                     <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: goal.done ? "line-through" : "none", color: goal.done ? "#666" : "#e0e0e0", flex: 1 }}>{goal.text}</span>
-                    <button onClick={() => setGoals(prev => prev.filter(g => g.id !== goal.id))} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 13, flexShrink: 0 }}>×</button>
+                    <button onClick={() => setGoals(prev => prev.filter(g => g.id !== goal.id))} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 13 }}>×</button>
                   </div>
                 ))}
                 <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
@@ -605,20 +550,18 @@ Après ta réponse ajoute :
             {sidebarTab === "progress" && (
               <div>
                 <div style={{ fontSize: 11, color: "#666", fontFamily: "monospace", marginBottom: 10 }}>PROGRESSION CECRL</div>
-                {CEFR_LEVELS.map((lvl, i) => {
+                {CEFR_LEVELS.map(lvl => {
                   const achieved = stats.xp >= lvl.xpRequired;
                   const isCurrent = currentLevel.id === lvl.id;
-                  return (
-                    <div key={lvl.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: isCurrent ? `${lvl.color}20` : "#1a1a2e", border: `1px solid ${isCurrent ? lvl.color + "60" : achieved ? lvl.color + "30" : "#2a2a4a"}`, opacity: achieved ? 1 : 0.4 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: achieved ? lvl.color : "#2a2a4a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: achieved ? "#0d0d1a" : "#555", flexShrink: 0 }}>{lvl.id}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: isCurrent ? lvl.color : "#ccc" }}>{lvl.label}</div>
-                        <div style={{ fontSize: 10, color: "#666", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lvl.description}</div>
-                      </div>
-                      {achieved && <span style={{ fontSize: 14 }}>✓</span>}
-                      {isCurrent && <span style={{ fontSize: 10, color: lvl.color, fontFamily: "monospace" }}>●</span>}
+                  return <div key={lvl.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: isCurrent ? `${lvl.color}20` : "#1a1a2e", border: `1px solid ${isCurrent ? lvl.color + "60" : achieved ? lvl.color + "30" : "#2a2a4a"}`, opacity: achieved ? 1 : 0.4 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: achieved ? lvl.color : "#2a2a4a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: achieved ? "#0d0d1a" : "#555", flexShrink: 0 }}>{lvl.id}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: isCurrent ? lvl.color : "#ccc" }}>{lvl.label}</div>
+                      <div style={{ fontSize: 10, color: "#666" }}>{lvl.description}</div>
                     </div>
-                  );
+                    {achieved && <span style={{ fontSize: 14 }}>✓</span>}
+                    {isCurrent && <span style={{ fontSize: 10, color: lvl.color, fontFamily: "monospace" }}>●</span>}
+                  </div>;
                 })}
                 <div style={{ background: "#1a1a2e", borderRadius: 10, padding: 12, marginTop: 12, border: "1px solid #2a2a4a" }}>
                   {[["XP Total", stats.xp], ["Messages", stats.messages], ["Badges", earnedBadges.length + "/" + ALL_BADGES.length], ["Tests réussis", stats.testsPassed], ["Objectifs", goals.filter(g => g.done).length]].map(([k, v]) => (
@@ -634,8 +577,8 @@ Après ta réponse ajoute :
         </div>
       </div>
       <style>{`
-        @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-7px)} }
-        @keyframes slideIn { from{transform:translateX(100px);opacity:0} to{transform:translateX(0);opacity:1} }
+        @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-7px)}}
+        @keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
         *{box-sizing:border-box}
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-thumb{background:#2a2a4a;border-radius:2px}
