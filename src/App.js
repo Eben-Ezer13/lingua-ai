@@ -316,7 +316,7 @@ export default function LanguageTutor() {
         setTimeout(() => setNewBadge(null), 3500);
       }
     });
-  }, [stats]);
+  }, [stats, earnedBadges]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getSystemPrompt = useCallback(() => {
     const lvl = CEFR_LEVELS.find(l => l.id === cefrLevel);
@@ -392,7 +392,7 @@ Après ta réponse ajoute :
     setLoading(false);
   };
 
-  useEffect(() => { startSession(); }, [selectedLang, mode]);
+  useEffect(() => { startSession(); }, [selectedLang, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatMessage = (text) => {
     return text.split(/(_\(Translation:.*?\)_)/gs).map((p, i) =>
@@ -401,7 +401,6 @@ Après ta réponse ajoute :
   };
 
   const currentLevel = getCurrentLevel(stats.xp);
-  const nextLevel = getNextLevel(stats.xp);
 
   const SIDEBAR_TABS = [
     { id: "chat", icon: "💬", label: "Retour" },
